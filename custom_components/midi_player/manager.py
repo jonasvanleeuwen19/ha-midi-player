@@ -23,7 +23,7 @@ from .const import (
     LIBRARY_DIRECTORY,
     STORAGE_VERSION,
 )
-from .engine import PlaybackEngine, PlaybackError, PlaybackState
+from .engine import PlaybackEngine, PlaybackError, PlaybackState, RepeatMode
 from .esphome_actions import device_name_from_entry, esphome_service_name
 from .library import LibraryEntry, LibraryError, MidiLibrary
 from .melody import Melody
@@ -192,6 +192,10 @@ class MidiPlayerManager:
         return self._engine.buzzer_count
 
     @property
+    def repeat(self) -> RepeatMode:
+        return self._engine.repeat
+
+    @property
     def state(self) -> PlaybackState:
         return self._engine.state
 
@@ -225,7 +229,11 @@ class MidiPlayerManager:
         self._store.async_delay_save(self._stored_data, 1)
 
     def _stored_data(self) -> dict[str, Any]:
-        return {"selected_file": self._selected, "buzzer": self._engine.buzzer}
+        return {
+            "selected_file": self._selected,
+            "buzzer": self._engine.buzzer,
+            "repeat": self._engine.repeat.value,
+        }
 
     async def _run(self, operation: Coroutine[Any, Any, None]) -> None:
         try:
@@ -235,9 +243,19 @@ class MidiPlayerManager:
 
     async def async_setup(self) -> None:
         stored = await self._store.async_load() or {}
+
         buzzer = stored.get("buzzer")
         if isinstance(buzzer, int) and 1 <= buzzer <= self.buzzer_count:
             await self._engine.set_buzzer(buzzer)
+
+        stored_repeat = stored.get("repeat")
+        if isinstance(stored_repeat, str):
+            try:
+                repeat = RepeatMode(stored_repeat)
+            except ValueError:
+                repeat = RepeatMode.OFF
+            await self._engine.set_repeat(repeat)
+
         selected = stored.get("selected_file")
         if selected in self._hub.files:
             try:
@@ -247,6 +265,7 @@ class MidiPlayerManager:
             else:
                 await self._engine.load(melody)
                 self._selected = selected
+
         self._hub.add_manager(self)
 
     async def async_shutdown(self) -> None:
@@ -288,6 +307,16 @@ class MidiPlayerManager:
 
     async def async_set_buzzer(self, buzzer: int) -> None:
         await self._run(self._engine.set_buzzer(buzzer))
+        self._save_state()
+        self._handle_change()
+
+    async def async_set_repeat(self, repeat: str | RepeatMode) -> None:
+        try:
+            mode = repeat if isinstance(repeat, RepeatMode) else RepeatMode(repeat)
+        except ValueError as err:
+            raise ServiceValidationError(f"Unknown repeat mode: {repeat}") from err
+
+        await self._run(self._engine.set_repeat(mode))
         self._save_state()
         self._handle_change()
 

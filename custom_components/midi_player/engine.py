@@ -27,6 +27,12 @@ class PlaybackState(StrEnum):
     PAUSED = "paused"
 
 
+class RepeatMode(StrEnum):
+    OFF = "off"
+    ONE = "one"
+    ALL = "all"
+
+
 SendChunk = Callable[[int, bool, list[float], list[int]], Awaitable[None]]
 SendStop = Callable[[], Awaitable[None]]
 TaskFactory = Callable[[Coroutine[Any, Any, None]], "asyncio.Task[None]"]
@@ -58,6 +64,7 @@ class PlaybackEngine:
         self._melody: Melody | None = None
         self._starts: list[int] = []
         self._state = PlaybackState.IDLE
+        self._repeat = RepeatMode.OFF
         self._buzzer_count = buzzer_count
         self._buzzer = 1
         self._position_ms = 0
@@ -69,6 +76,10 @@ class PlaybackEngine:
     @property
     def state(self) -> PlaybackState:
         return self._state
+
+    @property
+    def repeat(self) -> RepeatMode:
+        return self._repeat
 
     @property
     def buzzer(self) -> int:
@@ -96,6 +107,16 @@ class PlaybackEngine:
             elapsed = (self._clock() - self._started_at) * 1000
             return int(min(self.duration_ms, self._origin_ms + elapsed))
         return self._position_ms
+
+    async def set_repeat(self, repeat: RepeatMode | str) -> None:
+        try:
+            mode = RepeatMode(repeat)
+        except ValueError as err:
+            raise PlaybackError(f"Unknown repeat mode: {repeat}") from err
+
+        async with self._lock:
+            self._repeat = mode
+            self._notify()
 
     async def load(self, melody: Melody | None) -> None:
         async with self._lock:
@@ -206,7 +227,10 @@ class PlaybackEngine:
         return frequencies, durations, end, sent_ms
 
     async def _begin(self, position_ms: int) -> None:
-        self._require_melody()
+        melody = self._require_melody()
+        if not melody.segments or melody.duration_ms <= 0:
+            raise PlaybackError("The selected MIDI file is empty")
+
         position = max(0, min(int(position_ms), self.duration_ms - 1))
         index = bisect_right(self._starts, position) - 1
         offset = position - self._starts[index]
@@ -221,6 +245,7 @@ class PlaybackEngine:
             self._state = PlaybackState.IDLE
             self._notify()
             raise
+
         self._origin_ms = position
         self._started_at = self._clock()
         self._position_ms = position
@@ -240,9 +265,11 @@ class PlaybackEngine:
                     next_index, 0, sent_ms
                 )
                 await self._send_chunk(self._buzzer, False, frequencies, durations)
+
             remaining = self.duration_ms - self.position_ms
             if remaining > 0:
                 await self._sleep(remaining / 1000)
+
         except asyncio.CancelledError:
             raise
         except Exception as err:
@@ -253,10 +280,24 @@ class PlaybackEngine:
             self._notify()
             await self._send_stop_quietly()
             return
+
+        await self._send_stop_quietly()
+
+        if self._repeat is not RepeatMode.OFF:
+            try:
+                async with self._lock:
+                    if self._state is PlaybackState.PLAYING:
+                        await self._begin(0)
+                        return
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:
+                _LOGGER.error("Could not repeat MIDI playback: %s", err)
+                self._last_error = str(err)
+
         self._position_ms = 0
         self._state = PlaybackState.IDLE
         self._notify()
-        await self._send_stop_quietly()
 
     async def _send_stop_quietly(self) -> None:
         try:

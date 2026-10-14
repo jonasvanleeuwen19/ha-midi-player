@@ -8,6 +8,7 @@ import voluptuous as vol
 from homeassistant.components.media_player import (
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
+    MediaPlayerRepeat,
     MediaPlayerState,
     MediaType,
 )
@@ -36,6 +37,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     async_add_entities([MidiPlayerMediaPlayer(entry.runtime_data, entry)])
+
     platform = entity_platform.async_get_current_platform()
     platform.async_register_entity_service(
         SERVICE_PLAY_FILE,
@@ -61,10 +63,16 @@ class MidiPlayerMediaPlayer(MediaPlayerEntity):
         | MediaPlayerEntityFeature.SEEK
         | MediaPlayerEntityFeature.SELECT_SOURCE
         | MediaPlayerEntityFeature.SELECT_SOUND_MODE
+        | MediaPlayerEntityFeature.REPEAT_SET
     )
 
-    def __init__(self, manager: MidiPlayerManager, entry: MidiPlayerConfigEntry) -> None:
+    def __init__(
+        self,
+        manager: MidiPlayerManager,
+        entry: MidiPlayerConfigEntry,
+    ) -> None:
         self._manager = manager
+        self._repeat = MediaPlayerRepeat.OFF
         self._attr_unique_id = entry.entry_id
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -82,6 +90,14 @@ class MidiPlayerMediaPlayer(MediaPlayerEntity):
         return STATE_MAP[self._manager.state]
 
     @property
+    def repeat(self) -> MediaPlayerRepeat:
+        return self._repeat
+
+    async def async_set_repeat(self, repeat: MediaPlayerRepeat) -> None:
+        self._repeat = repeat
+        self.async_write_ha_state()
+
+    @property
     def source_list(self) -> list[str]:
         return sorted(self._manager.files)
 
@@ -91,7 +107,10 @@ class MidiPlayerMediaPlayer(MediaPlayerEntity):
 
     @property
     def sound_mode_list(self) -> list[str]:
-        return [f"Buzzer {number}" for number in range(1, self._manager.buzzer_count + 1)]
+        return [
+            f"Buzzer {number}"
+            for number in range(1, self._manager.buzzer_count + 1)
+        ]
 
     @property
     def sound_mode(self) -> str:
@@ -147,8 +166,14 @@ class MidiPlayerMediaPlayer(MediaPlayerEntity):
         try:
             number = int(sound_mode.rsplit(" ", 1)[-1])
         except ValueError as err:
-            raise ServiceValidationError(f"Unknown buzzer: {sound_mode}") from err
+            raise ServiceValidationError(
+                f"Unknown buzzer: {sound_mode}"
+            ) from err
         await self._manager.async_set_buzzer(number)
 
-    async def async_play_file(self, filename: str, buzzer: int | None = None) -> None:
+    async def async_play_file(
+        self,
+        filename: str,
+        buzzer: int | None = None,
+    ) -> None:
         await self._manager.async_play_file(filename, buzzer)

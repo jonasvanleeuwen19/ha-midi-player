@@ -34,7 +34,7 @@ Add the package to your existing device configuration. Nothing else in your conf
 
 ```yaml
 packages:
-  midi_player: github://OWNER/midi_player/esphome/midi_player.yaml@main
+  midi_player: github://jonasvanleeuwen19/ha-midi-player/esphome/midi_player.yaml@main
 ```
 
 Tell the package which outputs are your buzzers with substitutions. The defaults are `buzzer_1` for the first buzzer and the same output for all other slots, so a single buzzer with the id `buzzer_1` needs no substitutions at all.
