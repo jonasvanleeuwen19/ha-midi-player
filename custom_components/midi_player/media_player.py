@@ -10,7 +10,6 @@ from homeassistant.components.media_player import (
     MediaPlayerEntityFeature,
     MediaPlayerState,
     MediaType,
-    RepeatMode as HARepeatMode,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
@@ -19,7 +18,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import ATTR_BUZZER, ATTR_FILENAME, DOMAIN, MAX_BUZZERS, SERVICE_PLAY_FILE
-from .engine import PlaybackState
+from .engine import PlaybackState, RepeatMode
 from .manager import MidiPlayerConfigEntry, MidiPlayerManager
 
 PARALLEL_UPDATES = 0
@@ -89,11 +88,18 @@ class MidiPlayerMediaPlayer(MediaPlayerEntity):
         return STATE_MAP[self._manager.state]
 
     @property
-    def repeat(self) -> HARepeatMode:
-        return HARepeatMode(self._manager.repeat.value)
+    def repeat(self) -> str:
+        return self._manager.repeat.value
 
-    async def async_set_repeat(self, repeat: HARepeatMode) -> None:
-        await self._manager.async_set_repeat(repeat.value)
+    async def async_set_repeat(self, repeat: str) -> None:
+        try:
+            mode = RepeatMode(repeat)
+        except ValueError as err:
+            raise ServiceValidationError(
+                f"Unknown repeat mode: {repeat}"
+            ) from err
+
+        await self._manager.async_set_repeat(mode.value)
 
     @property
     def source_list(self) -> list[str]:
@@ -143,6 +149,7 @@ class MidiPlayerMediaPlayer(MediaPlayerEntity):
             "buzzer_count": self._manager.buzzer_count,
             "file_count": len(self._manager.files),
             "last_error": self._manager.last_error,
+            "repeat": self._manager.repeat.value,
         }
 
     async def async_media_play(self) -> None:
@@ -167,6 +174,7 @@ class MidiPlayerMediaPlayer(MediaPlayerEntity):
             raise ServiceValidationError(
                 f"Unknown buzzer: {sound_mode}"
             ) from err
+
         await self._manager.async_set_buzzer(number)
 
     async def async_play_file(
