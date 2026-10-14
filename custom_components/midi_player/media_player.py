@@ -8,9 +8,9 @@ import voluptuous as vol
 from homeassistant.components.media_player import (
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
-    MediaPlayerRepeat,
     MediaPlayerState,
     MediaType,
+    RepeatMode as HARepeatMode,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
@@ -72,7 +72,6 @@ class MidiPlayerMediaPlayer(MediaPlayerEntity):
         entry: MidiPlayerConfigEntry,
     ) -> None:
         self._manager = manager
-        self._repeat = MediaPlayerRepeat.OFF
         self._attr_unique_id = entry.entry_id
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -90,12 +89,11 @@ class MidiPlayerMediaPlayer(MediaPlayerEntity):
         return STATE_MAP[self._manager.state]
 
     @property
-    def repeat(self) -> MediaPlayerRepeat:
-        return self._repeat
+    def repeat(self) -> HARepeatMode:
+        return HARepeatMode(self._manager.repeat.value)
 
-    async def async_set_repeat(self, repeat: MediaPlayerRepeat) -> None:
-        self._repeat = repeat
-        self.async_write_ha_state()
+    async def async_set_repeat(self, repeat: HARepeatMode) -> None:
+        await self._manager.async_set_repeat(repeat.value)
 
     @property
     def source_list(self) -> list[str]:
