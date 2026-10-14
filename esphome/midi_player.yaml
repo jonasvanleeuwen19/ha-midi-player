@@ -1,0 +1,164 @@
+substitutions:
+  midi_buzzer_1: buzzer_1
+  midi_buzzer_2: ${midi_buzzer_1}
+  midi_buzzer_3: ${midi_buzzer_1}
+  midi_buzzer_4: ${midi_buzzer_1}
+  midi_duty: 50%
+
+api:
+  actions:
+    - action: midi_play_chunk
+      variables:
+        buzzer: int
+        clear_queue: bool
+        frequencies: float[]
+        durations: int[]
+      then:
+        - lambda: |-
+            if (clear_queue) {
+              id(midi_frequencies).clear();
+              id(midi_durations).clear();
+              id(midi_index) = 0;
+              id(midi_playing) = false;
+              id(midi_buzzer) = (buzzer >= 1 && buzzer <= 4) ? buzzer : 1;
+            } else if (id(midi_index) > 0) {
+              id(midi_frequencies).erase(id(midi_frequencies).begin(), id(midi_frequencies).begin() + id(midi_index));
+              id(midi_durations).erase(id(midi_durations).begin(), id(midi_durations).begin() + id(midi_index));
+              id(midi_index) = 0;
+            }
+            size_t count = std::min(frequencies.size(), durations.size());
+            for (size_t i = 0; i < count && id(midi_durations).size() < 2048; i++) {
+              id(midi_frequencies).push_back(frequencies[i]);
+              id(midi_durations).push_back(durations[i] > 0 ? (uint32_t) durations[i] : 1);
+            }
+            if (!id(midi_playing) && id(midi_index) < id(midi_durations).size()) {
+              id(midi_playing) = true;
+              id(midi_deadline) = millis();
+            }
+        - if:
+            condition:
+              lambda: 'return clear_queue;'
+            then:
+              - script.execute: midi_silence
+    - action: midi_stop
+      then:
+        - lambda: |-
+            id(midi_playing) = false;
+            id(midi_frequencies).clear();
+            id(midi_durations).clear();
+            id(midi_index) = 0;
+        - script.execute: midi_silence
+
+globals:
+  - id: midi_frequencies
+    type: std::vector<float>
+  - id: midi_durations
+    type: std::vector<uint32_t>
+  - id: midi_index
+    type: size_t
+    initial_value: '0'
+  - id: midi_playing
+    type: bool
+    initial_value: 'false'
+  - id: midi_deadline
+    type: uint32_t
+    initial_value: '0'
+  - id: midi_buzzer
+    type: int
+    initial_value: '1'
+  - id: midi_current_frequency
+    type: float
+    initial_value: '0.0'
+
+script:
+  - id: midi_silence
+    then:
+      - output.turn_off: ${midi_buzzer_1}
+      - output.turn_off: ${midi_buzzer_2}
+      - output.turn_off: ${midi_buzzer_3}
+      - output.turn_off: ${midi_buzzer_4}
+  - id: midi_tone_1
+    then:
+      - output.turn_on: ${midi_buzzer_1}
+      - output.ledc.set_frequency:
+          id: ${midi_buzzer_1}
+          frequency: !lambda 'return id(midi_current_frequency);'
+      - output.set_level:
+          id: ${midi_buzzer_1}
+          level: ${midi_duty}
+  - id: midi_tone_2
+    then:
+      - output.turn_on: ${midi_buzzer_2}
+      - output.ledc.set_frequency:
+          id: ${midi_buzzer_2}
+          frequency: !lambda 'return id(midi_current_frequency);'
+      - output.set_level:
+          id: ${midi_buzzer_2}
+          level: ${midi_duty}
+  - id: midi_tone_3
+    then:
+      - output.turn_on: ${midi_buzzer_3}
+      - output.ledc.set_frequency:
+          id: ${midi_buzzer_3}
+          frequency: !lambda 'return id(midi_current_frequency);'
+      - output.set_level:
+          id: ${midi_buzzer_3}
+          level: ${midi_duty}
+  - id: midi_tone_4
+    then:
+      - output.turn_on: ${midi_buzzer_4}
+      - output.ledc.set_frequency:
+          id: ${midi_buzzer_4}
+          frequency: !lambda 'return id(midi_current_frequency);'
+      - output.set_level:
+          id: ${midi_buzzer_4}
+          level: ${midi_duty}
+
+interval:
+  - interval: 2ms
+    then:
+      - if:
+          condition:
+            lambda: |-
+              if (!id(midi_playing)) return false;
+              uint32_t now = millis();
+              if ((int32_t) (now - id(midi_deadline)) < 0) return false;
+              if (id(midi_index) >= id(midi_durations).size()) {
+                id(midi_playing) = false;
+                id(midi_current_frequency) = 0.0f;
+                return true;
+              }
+              uint32_t duration = id(midi_durations)[id(midi_index)];
+              id(midi_current_frequency) = id(midi_frequencies)[id(midi_index)];
+              id(midi_index)++;
+              if ((int32_t) (now - id(midi_deadline)) > 100) {
+                id(midi_deadline) = now;
+              }
+              id(midi_deadline) += duration;
+              return true;
+          then:
+            - if:
+                condition:
+                  lambda: 'return id(midi_current_frequency) >= 20.0f;'
+                then:
+                  - if:
+                      condition:
+                        lambda: 'return id(midi_buzzer) == 2;'
+                      then:
+                        - script.execute: midi_tone_2
+                      else:
+                        - if:
+                            condition:
+                              lambda: 'return id(midi_buzzer) == 3;'
+                            then:
+                              - script.execute: midi_tone_3
+                            else:
+                              - if:
+                                  condition:
+                                    lambda: 'return id(midi_buzzer) == 4;'
+                                  then:
+                                    - script.execute: midi_tone_4
+                                  else:
+                                    - script.execute: midi_tone_1
+                else:
+                  - script.execute: midi_silence

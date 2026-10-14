@@ -1,0 +1,35 @@
+substitutions:
+  midi_buzzer_1: buzzer_1
+  midi_buzzer_2: buzzer_2
+
+esphome:
+  name: buzzer-player
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+output:
+  - platform: ledc
+    pin: GPIO18
+    id: buzzer_1
+  - platform: ledc
+    pin: GPIO19
+    id: buzzer_2
+
+packages:
+  midi_player: github://OWNER/midi_player/esphome/midi_player.yaml@main

@@ -1,0 +1,12 @@
+alias: Play a melody when the button is pressed
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.my_device_button
+    to: "on"
+actions:
+  - action: midi_player.play_file
+    target:
+      entity_id: media_player.my_device_midi_player
+    data:
+      filename: song.mid
+      buzzer: 1

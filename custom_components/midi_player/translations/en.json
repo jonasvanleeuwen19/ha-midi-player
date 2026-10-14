@@ -1,0 +1,60 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MIDI Player",
+        "description": "Select the ESPHome device that includes the MIDI Player package and enter how many buzzers it has.",
+        "data": {
+          "esphome_entry_id": "ESPHome device",
+          "buzzer_count": "Number of buzzers"
+        }
+      },
+      "reconfigure": {
+        "title": "MIDI Player",
+        "description": "Change the number of buzzers.",
+        "data": {
+          "buzzer_count": "Number of buzzers"
+        }
+      }
+    },
+    "error": {
+      "invalid_device": "The selected device is not an ESPHome device.",
+      "actions_missing": "The device does not provide the MIDI Player actions. Add the MIDI Player package to the ESPHome configuration, install it and make sure the device is online."
+    },
+    "abort": {
+      "already_configured": "This ESPHome device is already configured.",
+      "no_esphome_devices": "No ESPHome devices were found. Add your ESP32 with the ESPHome integration first.",
+      "reconfigure_successful": "The number of buzzers was updated."
+    }
+  },
+  "services": {
+    "play_file": {
+      "name": "Play file",
+      "description": "Selects a MIDI file from the library and plays it from the beginning.",
+      "fields": {
+        "filename": {
+          "name": "File name",
+          "description": "The name of a file in the MIDI library, for example song.mid."
+        },
+        "buzzer": {
+          "name": "Buzzer",
+          "description": "The buzzer number to use. The current selection is kept when this is left empty."
+        }
+      }
+    },
+    "delete_file": {
+      "name": "Delete file",
+      "description": "Deletes a MIDI file from the library.",
+      "fields": {
+        "filename": {
+          "name": "File name",
+          "description": "The name of the file to delete."
+        }
+      }
+    },
+    "rescan_library": {
+      "name": "Rescan library",
+      "description": "Reads the MIDI library folder again. Use this after copying files into the folder manually."
+    }
+  }
+}

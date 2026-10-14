@@ -1,0 +1,27 @@
+play_file:
+  target:
+    entity:
+      integration: midi_player
+      domain: media_player
+  fields:
+    filename:
+      required: true
+      example: "song.mid"
+      selector:
+        text:
+    buzzer:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+delete_file:
+  fields:
+    filename:
+      required: true
+      example: "song.mid"
+      selector:
+        text:
+rescan_library:
